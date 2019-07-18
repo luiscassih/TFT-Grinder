@@ -1,3 +1,8 @@
+# Author Luis C
+# July 2019
+# Disclaimer: I am not responsible for the consequences of using this script or getting you banned from Riot Games.
+# This is only for educational purpose. Be warned the risk for its use.
+
 import sys
 from enum import Enum
 import time
@@ -8,7 +13,6 @@ from PIL import Image
 import pyautogui
 import random
 import pytweening
-
 
 # Setting a bezier curve on mouse movement to simulate an human
 # Code from: https://github.com/asweigart/pyautogui/issues/80
@@ -35,7 +39,6 @@ def set_curve(func, tween=None, offset=0):
 
 pyautogui.getPointOnLine = getPointOnCurve 
 set_curve(getPointOnCurve, pytweening.easeInOutCubic, 300)
-
 
 # Images
 class _img():
@@ -71,7 +74,6 @@ def LookFor(item, screenshot):
         return max_loc
     return None
 
-
 def Click(loc, item):
     x, y = loc
     item_height,item_width,tq = item.shape
@@ -82,7 +84,7 @@ def Click(loc, item):
     #Randomize idle mouse returned position to not look like a robot
     pyautogui.moveTo(500+random.randint(0,700), 300+random.randint(0,300), .5)
 
-def Surrender():
+def TypeSurrender():
     print("Typing surrender")
     pyautogui.mouseDown()
     time.sleep(.3)
@@ -112,7 +114,6 @@ def WaitForMatchEnd():
         time.sleep(60)
         progress(x+1)
     sys.stdout.write('\n')
-
 
 _stage = Stage.LauncherMenu
 
@@ -158,7 +159,7 @@ while True:
         next
 
     if _stage == Stage.GameFinished:
-        Surrender()
+        TypeSurrender()
         screenshot = GrabScreenshot()
         _loc = LookFor(_img.surrender, screenshot)
         if _loc != None:
