@@ -49,6 +49,7 @@ class _img():
     gamestarted = cv2.imread("images/gamestarted.jpg")
     defeat = cv2.imread("images/defeat.jpg")
     playagain = cv2.imread("images/playagain.jpg")
+    #presurrender = cv2.imread("images/presurrender.jpg")
     surrender = cv2.imread("images/surrender.jpg")
 
 class Stage(Enum):
@@ -61,11 +62,17 @@ class Stage(Enum):
 
 # Init
 threshold = 0.8
+matchesCount = 0
+secondsToWait = 600
+_stage = Stage(int(sys.argv[1])) if len(sys.argv) == 2 else Stage.LauncherMenu
+startedLoading = None
+
+def log(message):
+    print(time.strftime("%d/%m/%Y %H:%M:%S >_"), message)
 
 def GrabScreenshot():
     return ImageGrab.grab().convert("RGB")
         
-
 def LookFor(item, screenshot):
     screen = cv2.cvtColor(numpy.array(screenshot), cv2.COLOR_RGB2BGR)
     result = cv2.matchTemplate(screen, item, cv2.TM_CCOEFF_NORMED)
@@ -74,18 +81,27 @@ def LookFor(item, screenshot):
         return max_loc
     return None
 
-def Click(loc, item):
+def Click(loc, item, randomReturn = True):
     x, y = loc
     item_height,item_width,tq = item.shape
     pyautogui.moveTo(x+(item_width/2), y+(item_height/2),.5)
     pyautogui.mouseDown()
     time.sleep(.3)
     pyautogui.mouseUp()
-    #Randomize idle mouse returned position to not look like a robot
-    pyautogui.moveTo(500+random.randint(0,700), 300+random.randint(0,300), .5)
+    if randomReturn:
+        #Randomize idle mouse returned position to not look like a robot
+        pyautogui.moveTo(500+random.randint(0,700), 400, .5)
 
-def TypeSurrender():
-    print("Typing surrender")
+def progress(count, totalSeconds):
+    width = 70
+    completed = int(count * width / totalSeconds)
+    display = '#' * completed + '_' * (width - completed)
+    timeLeft = time.strftime("%M:%S", time.gmtime(totalSeconds-count))
+    sys.stdout.write('[%s] %s minutes left\r' % (display, timeLeft))
+    sys.stdout.flush()
+
+def surrender():
+    log("Trying to surrender")
     pyautogui.mouseDown()
     time.sleep(.3)
     pyautogui.mouseUp()
@@ -98,31 +114,23 @@ def TypeSurrender():
     pyautogui.typewrite('f')
     time.sleep(.5)
     pyautogui.press('enter')
-    time.sleep(3)
-
-def progress(count):
-    width = 40
-    completed = int(count * width / 10)
-    display = '#' * completed + '_' * (width - completed)
-    sys.stdout.write('[%s] Waiting 10 minutes\r' % display)
-    sys.stdout.flush()
 
 def WaitForMatchEnd():
-    print("Waiting 10 minutes")
-    progress(0)
-    for x in range(10):
-        time.sleep(60)
-        progress(x+1)
+    log("Waiting for match to end")
+    progress(0,secondsToWait)
+    for x in range(secondsToWait):
+        time.sleep(1)
+        progress(x+1, secondsToWait)
     sys.stdout.write('\n')
-
-_stage = Stage.LauncherMenu
+    log("Done, but waiting a random 0-5 extra seconds to not be like a robot []-D")
+    time.sleep(random.randint(0,5))
 
 while True:
     time.sleep(1)
     screenshot = GrabScreenshot()
 
     if _stage == Stage.LauncherMenu:
-        print("Looking for play button")
+        log("Looking for play button")
         _loc = LookFor(_img.playagain, screenshot)
         if _loc != None:
             Click(_loc, _img.playagain)
@@ -131,27 +139,33 @@ while True:
             if _loc != None:
                 Click(_loc, _img.matchsearch)
                 _stage = Stage.InQueue
-                print("Looking for a match")
+                log("Looking for a match")
         next
 
     if _stage == Stage.InQueue:
         _loc = LookFor(_img.matchfound, screenshot)
         if _loc != None:
             Click(_loc, _img.matchfound)
-            print("Match accepted")
+            log("Match accepted")
         else:
             _loc = LookFor(_img.loadingscreen, screenshot)
             if _loc != None:
                 _stage = Stage.LoadingScreen
-                print("On Loading Screen")
+                log("On Loading Screen")
+                startedLoading = time.time()
                 time.sleep(60)
         next
     
     if _stage == Stage.LoadingScreen:
         _loc = LookFor(_img.gamestarted, screenshot)
         if _loc != None:
+            Click(_loc, _img.gamestarted, False)
             _stage = Stage.GameStarted
-            print("Game Started")
+            log("Game Started")
+        else:
+            if startedLoading != None and (time.time() - startedLoading) >= 300:
+                log("5 Minutes has passed and still the game has not stared, something went wrong.")
+                # WIP - check and kill League process and then login again.
 
     if _stage == Stage.GameStarted:
         WaitForMatchEnd()
@@ -159,9 +173,27 @@ while True:
         next
 
     if _stage == Stage.GameFinished:
-        TypeSurrender()
-        screenshot = GrabScreenshot()
-        _loc = LookFor(_img.surrender, screenshot)
-        if _loc != None:
-            Click(_loc, _img.surrender)
-            _stage = Stage.LauncherMenu
+        surrender()
+        stillInGame = True
+        while stillInGame:
+            time.sleep(1)
+            screenshot = GrabScreenshot()
+            _loc = LookFor(_img.surrender, screenshot)
+            if _loc != None:
+                Click(_loc, _img.surrender)
+                log("Surrender button clicked, waiting 5 seconds to verify")
+                time.sleep(5)
+            else: 
+                _loc = LookFor(_img.playagain, screenshot)
+                if _loc != None:
+                    stillInGame = False
+                else:
+                    _loc = LookFor(_img.matchsearch, screenshot)
+                    if _loc != None:
+                        stillInGame = False
+                    else:
+                        #So, there's no button? maybe the surrender wasn't triggered
+                        surrender()
+        matchesCount += 1
+        log("Match done. Tokens farmed: " + str(matchesCount * 4) + ", for a total " + str(matchesCount) + " matches." )
+        _stage = Stage.LauncherMenu
